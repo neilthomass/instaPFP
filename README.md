@@ -12,7 +12,7 @@ Minimal tool to download an Instagram profile picture using Chrome mobile emulat
 ```bash
 # Install dependencies
 uv sync
-uv run python mobile_pfp.py USERNAME
+uv run python main.py USERNAME
 
 ```
 
