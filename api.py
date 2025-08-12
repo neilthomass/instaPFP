@@ -12,6 +12,7 @@ import requests
 from PIL import Image
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -23,6 +24,21 @@ logger = logging.getLogger("pfp_api")
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="Instagram PFP API", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+      "http://localhost:3000",      # React dev server
+        "http://127.0.0.1:3000",
+        "http://localhost:8080",     # Alternative localhost
+        "http://localhost:5173",     # Vite dev server
+        "http://localhost:8080",     # YOUR ACTUAL FRONTEND PORT ← ADD THIS
+        "http://127.0.0.1:8080",     # Vite dev server (if using Vite)
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["*"],
+)
 
 
 def _extract_largest_from_srcset(srcset_value: str) -> Optional[str]:
