@@ -116,9 +116,16 @@ def fetch_pfp(username: str) -> str:
     try:
         driver = webdriver.Chrome(options=chrome_options)
     except WebDriverException:
-        # Retry once with legacy headless flag for older chromes
-        chrome_options.arguments = [arg for arg in chrome_options.arguments if not arg.startswith("--headless")]
+        # Retry once with legacy headless flag for older Chromes.
+        chrome_options = Options()
+        chrome_options.add_experimental_option("mobileEmulation", {"deviceName": "iPhone 12 Pro"})
         chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--remote-debugging-port=0")
+        chrome_options.add_argument("--no-first-run")
+        chrome_options.add_argument("--no-default-browser-check")
         driver = webdriver.Chrome(options=chrome_options)
     try:
         profile_url = f"https://www.instagram.com/{username}/"
@@ -129,7 +136,7 @@ def fetch_pfp(username: str) -> str:
         if re.search(r"Sorry, this page isn(?:'|’)t available\\.", html, re.I):
             raise HTTPException(status_code=404, detail="Username not found")
 
-        wait = WebDriverWait(driver, 0.1)
+        wait = WebDriverWait(driver, 10)
         try:
             img_el = wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "img[alt*='profile picture'], img[alt*='profile photo']"))
