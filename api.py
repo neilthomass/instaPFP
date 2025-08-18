@@ -9,12 +9,6 @@ import requests
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import WebDriverException, TimeoutException
 
 logger = logging.getLogger("pfp_api")
 logging.basicConfig(level=logging.INFO)
@@ -55,30 +49,26 @@ def _extract_largest_from_srcset(srcset_value: str) -> Optional[str]:
     return candidates[0][1]
 
 
-def _extract_hd_from_page_json(driver: webdriver.Chrome) -> Optional[str]:
-    try:
-        html = driver.page_source
-        html = unescape(html)
-        m = re.search(r'"profile_pic_url_hd"\s*:\s*"(https:[^"\\]+)"', html)
-        if m:
-            return m.group(1)
-        m = re.search(r'"hd_profile_pic_versions"\s*:\s*(\[[^\]]+\])', html)
-        if m:
-            try:
-                versions = json.loads(m.group(1))
-                if isinstance(versions, list) and versions:
-                    versions.sort(key=lambda v: v.get("width", 0), reverse=True)
-                    return versions[0].get("url")
-            except Exception:
-                pass
-        m = re.search(r'"hd_profile_pic_url_info"\s*:\s*\{([^}]+)\}', html)
-        if m:
-            frag = m.group(0)
-            m2 = re.search(r'"url"\s*:\s*"(https:[^"\\]+)"', frag)
-            if m2:
-                return m2.group(1)
-    except Exception:
-        return None
+def _extract_hd_from_html(html: str) -> Optional[str]:
+    html = unescape(html)
+    m = re.search(r'"profile_pic_url_hd"\s*:\s*"(https:[^"\\]+)"', html)
+    if m:
+        return m.group(1)
+    m = re.search(r'"hd_profile_pic_versions"\s*:\s*(\[[^\]]+\])', html)
+    if m:
+        try:
+            versions = json.loads(m.group(1))
+            if isinstance(versions, list) and versions:
+                versions.sort(key=lambda v: v.get("width", 0), reverse=True)
+                return versions[0].get("url")
+        except Exception:
+            pass
+    m = re.search(r'"hd_profile_pic_url_info"\s*:\s*\{([^}]+)\}', html)
+    if m:
+        frag = m.group(0)
+        m2 = re.search(r'"url"\s*:\s*"(https:[^"\\]+)"', frag)
+        if m2:
+            return m2.group(1)
     return None
 
 
@@ -101,56 +91,50 @@ def fetch_pfp(username: str) -> str:
     """Fetch the best profile picture URL for a username."""
     username = username.lstrip('@')
 
-    chrome_options = Options()
-    # Fixed mobile emulation profile for consistency
-    chrome_options.add_experimental_option("mobileEmulation", {"deviceName": "iPhone 12 Pro"})
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--remote-debugging-port=0")
-    chrome_options.add_argument("--no-first-run")
-    chrome_options.add_argument("--no-default-browser-check")
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
 
-    # Prefer Selenium Manager to locate matching Chrome/Driver
-    try:
-        driver = webdriver.Chrome(options=chrome_options)
-    except WebDriverException:
-        # Retry once with legacy headless flag for older chromes
-        chrome_options.arguments = [arg for arg in chrome_options.arguments if not arg.startswith("--headless")]
-        chrome_options.add_argument("--headless")
-        driver = webdriver.Chrome(options=chrome_options)
-    try:
-        profile_url = f"https://www.instagram.com/{username}/"
-        driver.get(profile_url)
+    profile_url = f"https://www.instagram.com/{username}/"
+    r = requests.get(profile_url, headers=headers, timeout=30)
+    if r.status_code == 404:
+        raise HTTPException(status_code=404, detail="Username not found")
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail="Failed to fetch profile page")
 
-        # 404 template check
-        html = driver.page_source
-        if re.search(r"Sorry, this page isn(?:'|’)t available\\.", html, re.I):
-            raise HTTPException(status_code=404, detail="Username not found")
+    html = r.text
+    if re.search(r"Sorry, this page isn(?:'|’)?t available\\.", html, re.I):
+        raise HTTPException(status_code=404, detail="Username not found")
 
-        wait = WebDriverWait(driver, 0.1)
-        try:
-            img_el = wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "img[alt*='profile picture'], img[alt*='profile photo']"))
-            )
-        except TimeoutException:
-            raise HTTPException(status_code=404, detail="Image not found")
-
-        src = img_el.get_attribute("src") or ""
-        srcset = img_el.get_attribute("srcset") or ""
+    # Attempt to extract from img tag with profile alt text
+    img_tag_match = re.search(
+        r'<img[^>]+alt="[^"]*profile picture[^"]*"[^>]*>',
+        html,
+        re.IGNORECASE,
+    )
+    best_url = None
+    if img_tag_match:
+        tag = img_tag_match.group(0)
+        srcset_match = re.search(r'srcset="([^"]+)"', tag)
+        src_match = re.search(r'src="([^"]+)"', tag)
+        srcset = srcset_match.group(1) if srcset_match else ""
+        src = src_match.group(1) if src_match else ""
         best_url = _extract_largest_from_srcset(srcset) or src
-        if not best_url:
-            best_url = _extract_hd_from_page_json(driver)
-        if not best_url:
-            raise HTTPException(status_code=404, detail="Image not found")
 
-        return best_url
-    finally:
-        try:
-            driver.quit()
-        except Exception:
-            pass
+    if not best_url:
+        best_url = _extract_hd_from_html(html)
+
+    if not best_url:
+        # Fallback to Open Graph image
+        og_match = re.search(r'<meta property="og:image" content="([^"]+)"', html)
+        if og_match:
+            best_url = og_match.group(1)
+
+    if not best_url:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    return best_url
 
 
 @app.get("/pfp/{username}")
