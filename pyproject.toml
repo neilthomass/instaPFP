@@ -1,14 +1,13 @@
 [project]
 name = "download-pfp"
 version = "0.1.0"
-description = "Download Instagram profile picture via mobile emulation, print dimensions, then save"
+description = "Download Instagram profile picture via mobile emulation and save"
 authors = [{ name = "Your Name" }]
 readme = "README.md"
 requires-python = ">=3.8.1"
 dependencies = [
   "selenium>=4.15.0",
   "requests>=2.31.0",
-  "pillow>=10.0.0",
   "fastapi>=0.110.0",
   "uvicorn[standard]>=0.27.0",
 ]
