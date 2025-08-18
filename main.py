@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
-import io
-import re
 import json
-import time
 import logging
+import re
 from html import unescape
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 from urllib.parse import urlparse
 
 import requests
-from PIL import Image
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -70,36 +67,10 @@ def _extract_hd_from_page_json(driver: webdriver.Chrome) -> Optional[str]:
     return None
 
 
-def _get_image_dimensions_from_url(url: str) -> Optional[Tuple[int, int]]:
-    try:
-        resp = requests.get(url, timeout=20)
-        resp.raise_for_status()
-        with Image.open(io.BytesIO(resp.content)) as img:
-            return img.size
-    except Exception as e:
-        logger.warning(f"Could not get dimensions from URL: {e}")
-        return None
-
-
-import requests, re
-
-
 def download_pfp(username: str, device_name: str = "iPhone 12 Pro") -> Optional[str]:
-    """
-    Emulates a mobile device, retrieves the highest quality Instagram PFP for a username,
-    prints its dimensions, then downloads it to the downloads/ folder.
-
-    Returns the file path if successful, otherwise None.
-    """
+    """Download the highest quality Instagram profile picture for a username."""
     username = username.lstrip('@')
 
-    # Optional pre-check with headless browser (non-fatal):
-    # If you want to strictly gate, uncomment the next lines.
-    # if not ig_exists(username, device_name=device_name):
-    #     logger.error(f"Username not found: @{username}")
-    #     return None
-
-    # Setup Chrome with mobile emulation
     chrome_options = Options()
     mobile_emulation = {"deviceName": device_name}
     chrome_options.add_experimental_option("mobileEmulation", mobile_emulation)
@@ -114,8 +85,6 @@ def download_pfp(username: str, device_name: str = "iPhone 12 Pro") -> Optional[
         profile_url = f"https://www.instagram.com/{username}/"
         driver.get(profile_url)
 
-
-        # After navigating, check if Instagram returned the not-available template
         nav_html = driver.page_source
         if re.search(r"Sorry, this page isn(?:'|’)t available\\.", nav_html, re.I):
             logger.error(f"Username not found: @{username}")
@@ -135,21 +104,12 @@ def download_pfp(username: str, device_name: str = "iPhone 12 Pro") -> Optional[
         best_url = _extract_largest_from_srcset(srcset) or src
 
         if not best_url:
-            hd = _extract_hd_from_page_json(driver)
-            best_url = hd
+            best_url = _extract_hd_from_page_json(driver)
 
         if not best_url:
             logger.error("Could not find profile image URL")
             return None
 
-        # Print dimensions
-        dims = _get_image_dimensions_from_url(best_url)
-        if dims:
-            print(f"Image dimensions: {dims[0]}x{dims[1]} pixels")
-        else:
-            print("Image dimensions: unknown")
-
-        # Prepare download path
         downloads_dir = Path("downloads")
         downloads_dir.mkdir(exist_ok=True)
 
@@ -164,7 +124,6 @@ def download_pfp(username: str, device_name: str = "iPhone 12 Pro") -> Optional[
 
         filepath = downloads_dir / f"{username}.{ext}"
 
-        # Download
         with requests.get(best_url, stream=True, timeout=30) as r:
             r.raise_for_status()
             with open(filepath, 'wb') as f:

@@ -2,7 +2,7 @@
 
 Minimal tooling to fetch a user's Instagram profile picture using a headless (mobile emulated) browser. You can:
 - Run a local HTTP API to return the PFP as an image or JSON
-- Use a Python script to download and save the PFP locally and print dimensions
+- Use a Python script to download and save the PFP locally
 
 ## Requirements
 - Python 3.8.1+
@@ -25,19 +25,19 @@ curl -LO http://127.0.0.1:8000/pfp/instagram
 # Redirect to CDN URL
 curl -I "http://127.0.0.1:8000/pfp/instagram?redirect=1"
 
-# JSON metadata (URL, width, height)
+# JSON metadata (URL only)
 curl "http://127.0.0.1:8000/pfp/instagram?format=json"
 
 # Use a specific emulated device
 curl "http://127.0.0.1:8000/pfp/instagram?format=json&device=iPhone%2014%20Pro%20Max"
 ```
 
-## Script Usage (download and print dimensions)
+## Script Usage (download)
 If you have `instapfp.py` locally (download helper):
 ```bash
 uv run python instapfp.py USERNAME
 ```
-Images will be saved under `downloads/USERNAME.ext` and the resolution is printed to stdout.
+Images will be saved under `downloads/USERNAME.ext`.
 
 ## How It Works
 - Launches headless Chrome with mobile emulation (defaults to `iPhone 12 Pro`)

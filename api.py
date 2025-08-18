@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-import io
-import re
 import json
-import time
 import logging
+import re
 from html import unescape
-from typing import Optional, Tuple
-from urllib.parse import urlparse
+from typing import Optional
 
 import requests
-from PIL import Image
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,12 +24,11 @@ app = FastAPI(title="Instagram PFP API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-      "http://localhost:3000",      # React dev server
+        "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://localhost:8080",     # Alternative localhost
-        "http://localhost:5173",     # Vite dev server
-        "http://localhost:8080",     # YOUR ACTUAL FRONTEND PORT ← ADD THIS
-        "http://127.0.0.1:8080",     # Vite dev server (if using Vite)
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:5173",
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
@@ -128,7 +123,6 @@ def fetch_pfp(username: str) -> str:
     try:
         profile_url = f"https://www.instagram.com/{username}/"
         driver.get(profile_url)
-        time.sleep(2)
 
         # 404 template check
         html = driver.page_source
@@ -167,12 +161,12 @@ async def get_pfp(
 ):
     url = fetch_pfp(username)
 
-    
+    if format == "json":
+        return JSONResponse({"url": url})
 
     if redirect:
         return RedirectResponse(url)
 
-    # Proxy the image through this API
     r = requests.get(url, stream=True, timeout=30)
     if r.status_code != 200:
         raise HTTPException(status_code=404, detail="Image not found")
@@ -212,19 +206,14 @@ async def ui():
     button { padding: 0.7rem 1rem; background: linear-gradient(135deg,#6d28d9,#2563eb); color: white; border: 0; border-radius: 0.6rem; cursor: pointer; }
     button[disabled] { opacity: 0.6; cursor: progress; }
     .error { color: #fca5a5; margin-top: 0.6rem; min-height: 1.25rem; }
-    .meta { color: #cbd5e1; font-size: 0.95rem; margin-top: 0.6rem; }
-    .preview { margin-top: 1rem; text-align: center; }
   </style>
   <script>
     async function onSubmit(e) {
       e.preventDefault();
       const username = document.getElementById('username').value.trim().replace(/^@/, '');
       const errorEl = document.getElementById('error');
-      const metaEl = document.getElementById('meta');
-      const imgEl = null; // no inline img preview, we set page background instead
       const btn = document.getElementById('btn');
       errorEl.textContent = '';
-      metaEl.textContent = '';
       // clear previous background if any
       document.body.style.backgroundImage = '';
       if (!username) { errorEl.textContent = 'Please enter a username.'; return; }
@@ -272,7 +261,6 @@ async def ui():
       </div>
       <div id="error" class="error"></div>
     </form>
-    <div class="preview"><div id="meta" class="meta"></div></div>
   </div></div>
 </body>
 </html>
